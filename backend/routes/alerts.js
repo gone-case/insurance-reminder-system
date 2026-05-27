@@ -87,9 +87,12 @@ router.get('/logs', async (req, res) => {
 router.post('/trigger', async (req, res) => {
   try {
     res.json({ message: 'Reminder job triggered' });
-    runReminderJob(req.user._id); // run async for current agent
+    
+    // If Admin: trigger global job (null). If Agent: trigger only for self.
+    const agentId = req.user.role === 'admin' ? null : req.user._id;
+    runReminderJob(agentId);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Trigger error:', err);
   }
 });
 
