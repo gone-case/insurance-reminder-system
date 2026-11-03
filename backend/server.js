@@ -16,9 +16,13 @@ const { runReminderJob } = require('./utils/reminderJob');
 
 const app = express();
 
+// Render sits behind a proxy: trust it so req.ip is the real client IP
+// (otherwise every user shares one rate-limit bucket)
+app.set('trust proxy', 1);
+
 // ── CORS ──────────────────────────────────────────────────────────────────────
 const allowedOrigins = [
-  process.env.CLIENT_URL,
+  ...(process.env.CLIENT_URL || '').split(',').map(s => s.trim()),
   'http://localhost:3000',
   'http://localhost:5173',
 ].filter(Boolean);
@@ -35,6 +39,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ── Health check (before the rate limiter, so uptime pings are never blocked) ─
+app.get('/api/health', (_, res) => res.json({ status: 'OK', timestamp: new Date() }));
+
 // Rate limiting
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
 app.use('/api/', limiter);
@@ -47,8 +54,6 @@ app.use('/api/alerts', alertRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/quick-actions', quickActionRoutes);
 app.use('/api/sms', smsWebhookRoutes);
-
-app.get('/api/health', (_, res) => res.json({ status: 'OK', timestamp: new Date() }));
 
 // ── Error Handler ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
